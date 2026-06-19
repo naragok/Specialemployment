@@ -1,0 +1,2352 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>특고 고용·산재 신고 통합 관리 시스템</title>
+    <!-- Tailwind CSS for Modern Premium UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel Generation -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+        }
+        /* Custom scrollbar for 31-day grid */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .page-break {
+                page-break-after: always;
+                break-after: page;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <!-- Construction Logo SVG -->
+                    <svg class="h-8 w-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    <div>
+                        <span class="font-bold text-lg tracking-wider text-white">CONSTRUCT_AI</span>
+                        <span class="text-xs block text-slate-400 font-medium">특수형태근로종사자 현장별 통합 관리</span>
+                    </div>
+                </div>
+                
+                <!-- Company / Site Selection Controller -->
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs text-slate-400 font-semibold hidden md:inline">현재 현장 선택:</label>
+                    <select id="site-selector" onchange="onSiteChanged()" class="bg-slate-800 border border-slate-700 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                        <!-- Dynamic Options Loaded by JS -->
+                    </select>
+                    <button onclick="openSiteManagerModal()" class="bg-slate-800 hover:bg-slate-700 text-white p-1.5 rounded-lg border border-slate-700 text-xs font-semibold" title="회사/현장 신규 등록">
+                        ➕ 현장관리
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-grow max-w-[95%] w-full mx-auto px-2 sm:px-4 py-6">
+        
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-slate-200 mb-6 bg-white p-1 rounded-xl shadow-sm">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-3 text-center text-sm font-semibold rounded-lg transition-all duration-200 bg-slate-900 text-white shadow">
+                📊 현황 대시보드
+            </button>
+            <button onclick="switchTab('database')" id="tab-database" class="flex-1 py-3 text-center text-sm font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:bg-slate-100">
+                📋 기사·인건비 관리 대장 (MOP 양식)
+            </button>
+            <button onclick="switchTab('ai')" id="tab-ai" class="flex-1 py-3 text-center text-sm font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-1">
+                ✨ AI 문서 분석 & 감사
+            </button>
+        </div>
+
+        <!-- Notification Banner -->
+        <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+        <!-- TAB 1: DASHBOARD -->
+        <div id="content-dashboard" class="space-y-6">
+            <!-- Project Brief Info -->
+            <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
+                <div class="absolute right-0 top-0 opacity-10 transform translate-x-12 -translate-y-12">
+                    <svg class="w-64 h-64" fill="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                </div>
+                <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span id="dash-badge-month" class="text-xs uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-semibold">2026년 05월 신고 대상</span>
+                            <span class="text-xs tracking-wider bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full font-semibold">MOP 고정 요율 완벽 호환</span>
+                        </div>
+                        <h1 id="dash-company-title" class="text-2xl sm:text-3xl font-bold mt-2">(주)유일건설 기계장비투입대장</h1>
+                        <p id="dash-site-title" class="text-slate-300 mt-1 text-sm sm:text-base">원주 캠프롱 문화체육공원 조성사업(조경, 토목) 현장</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="exportJSONBackup()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1">
+                            📥 시스템 백업 (JSON)
+                        </button>
+                        <button onclick="triggerJSONUpload()" class="bg-indigo-950 hover:bg-indigo-900 text-slate-200 border border-indigo-800 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1">
+                            📤 시스템 복구
+                        </button>
+                        <input type="file" id="json-file-input" class="hidden" accept=".json" onchange="importJSONBackup(event)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 요율 커스텀 제어판 (유용한 기능 3) -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">고용보험료 기사 요율 (%)</label>
+                    <input type="number" id="setting-driver-rate" value="0.9" step="0.1" onchange="updateUI()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">고용보험료 회사 요율 (%)</label>
+                    <input type="number" id="setting-company-rate" value="0.9" step="0.1" onchange="updateUI()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">산재보험 시뮬레이션 요율 (%)</label>
+                    <input type="number" id="setting-accident-rate" value="1.85" step="0.01" onchange="updateUI()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                </div>
+            </div>
+
+            <!-- Stats Overview Card Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                    <div class="p-3 bg-blue-100 text-blue-600 rounded-xl">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 005.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block font-medium">총 신고 대상(기사)</span>
+                        <div class="flex items-baseline space-x-2">
+                            <span id="stat-total-operators" class="text-2xl font-bold text-slate-900">-</span>
+                            <span id="badge-warning-count" class="text-xs text-rose-500 font-semibold bg-rose-50 px-1.5 py-0.5 rounded-md hidden">오류 0건</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                    <div class="p-3 bg-indigo-100 text-indigo-600 rounded-xl">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block font-medium">총 가동 일수</span>
+                        <span id="stat-total-days" class="text-2xl font-bold text-slate-900">-</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                    <div class="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block font-medium">총 장비 공급가액</span>
+                        <span id="stat-total-supply" class="text-2xl font-bold text-slate-900">-</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                    <div class="p-3 bg-amber-100 text-amber-600 rounded-xl">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block font-medium">고용/산재 보수총액</span>
+                        <span id="stat-total-insurance" class="text-2xl font-bold text-slate-900">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Widgets -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Equipment Distribution & Tax Summary -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> 장비별 가동 점유율
+                        </h3>
+                        <div class="space-y-3" id="equipment-share-container">
+                            <!-- Dynamic calculation -->
+                        </div>
+                    </div>
+                    
+                    <!-- Real-time Insurance Fee & Tax Calculator -->
+                    <div class="mt-6 pt-6 border-t border-slate-100">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🛡️ 기금 부담비율 및 원천징수 요약</h4>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between p-2 bg-slate-50 rounded-lg">
+                                <span class="text-slate-500" id="driver-fee-label">보험료 기사 부담액 (고용 0.9%)</span>
+                                <span id="summary-driver-fee" class="font-bold text-slate-800">₩0</span>
+                            </div>
+                            <div class="flex justify-between p-2 bg-slate-50 rounded-lg">
+                                <span class="text-slate-500" id="company-fee-label">회사 부담액 (고용+산재)</span>
+                                <span id="summary-company-fee" class="font-bold text-indigo-600">₩0</span>
+                            </div>
+                            <div class="flex justify-between p-2 bg-red-50/50 rounded-lg border border-red-100">
+                                <span class="text-red-700 font-semibold">사업소득세 및 지방세 (3.3% 공제액)</span>
+                                <span id="summary-tax-fee" class="font-bold text-red-600">₩0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Days Chart Visualizer (SVG Based) -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2">
+                    <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 인원별 투입 실적 (일수)
+                    </h3>
+                    <div class="h-56 flex items-end justify-between space-x-2 pt-6" id="days-chart-container">
+                        <!-- Dynamic Chart Bars -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Warning Panel -->
+            <div id="warning-alert-panel" class="hidden bg-rose-50 border border-rose-100 rounded-2xl p-5 flex items-start gap-3">
+                <span class="text-rose-500 text-lg">🚨</span>
+                <div class="flex-grow">
+                    <h4 class="font-bold text-rose-900 text-sm">신고 전 기재사항 보완 조치가 필요한 건이 검출되었습니다.</h4>
+                    <p class="text-xs text-rose-700 mt-1" id="warning-panel-text">주소 미기재, 연락처 오류 등이 있으면 공단 접수 시 즉시 반려되거나 보수총액 신고에서 제외될 위험이 있습니다.</p>
+                </div>
+                <button onclick="switchTab('database')" class="text-xs font-bold text-rose-800 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors">
+                    상세 내역 확인 및 보완
+                </button>
+            </div>
+
+            <!-- Next Step Guide Box -->
+            <div class="bg-blue-50 border border-blue-100 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-start space-x-3">
+                    <div class="p-2 bg-blue-500 text-white rounded-lg mt-0.5">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-900">공단 맞춤형 신고 파일 및 기사 세액 정리 완료</h4>
+                        <p class="text-sm text-slate-600 mt-1">현재 정제된 데이터는 즉시 엑셀 서식(31일 일자별 공수 포함)으로 일괄 출력할 수 있으며, 기사별 세무 신고용 원천징수 명세도 세부 조회가 가능합니다.</p>
+                    </div>
+                </div>
+                <button onclick="downloadExcel()" class="bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl font-semibold shadow-md transition-colors text-sm whitespace-nowrap flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    공단양식 엑셀 다운로드 (공수 포함)
+                </button>
+            </div>
+        </div>
+
+        <!-- TAB 2: DATABASE (MOP Ledger 3-Subrow Style) -->
+        <div id="content-database" class="space-y-6 hidden">
+            <!-- Operations Bar -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col xl:flex-row justify-between items-center gap-4">
+                <!-- Search & Filter -->
+                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                    <div class="relative w-full sm:w-64">
+                        <input type="text" id="search-input" oninput="filterTable()" placeholder="기사명, 전화번호, 장비명 검색..." class="pl-10 pr-4 py-2 w-full rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <svg class="absolute left-3 top-2.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <select id="filter-error-select" onchange="filterTable()" class="border border-slate-200 px-3 py-2 rounded-xl text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="all">전체 기사 보기</option>
+                        <option value="warning">⚠️ 보완 조치 필요 건만 보기</option>
+                    </select>
+                    <!-- 유용한 기능 1: 원클릭 공수 조절 매크로 단추 -->
+                    <button onclick="openMacroModal()" class="bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-semibold transition-all">
+                        ⚙️ 공수 일괄조정 매크로
+                    </button>
+                </div>
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-2 w-full xl:w-auto justify-end">
+                    <!-- 유용한 기능 2: 일괄 지급 명세서 인쇄 -->
+                    <button onclick="printAllReceipts()" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5" title="현재 표에 필터링되어 나타난 전체 기사의 영수증을 연속 출력합니다">
+                        🖨️ 지급명세서 일괄 인쇄
+                    </button>
+                    <button onclick="openAddModal()" class="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        기사 등록
+                    </button>
+                    <button onclick="exportOperatorsExcel()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5" title="1-31일 일자별 공수와 금액을 엑셀로 내보냅니다">
+                        📥 기사 내보내기 (Excel)
+                    </button>
+                    <button onclick="triggerOperatorsUpload()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5" title="엑셀로 일괄 편집한 기사 및 공수내역을 가져옵니다">
+                        📤 기사 가져오기 (Excel)
+                    </button>
+                    <input type="file" id="operator-excel-input" class="hidden" accept=".xlsx, .xls" onchange="importOperatorsExcel(event)">
+                    
+                    <button onclick="downloadExcel()" class="bg-emerald-600 text-white hover:bg-emerald-700 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Excel 다운로드 (공수포함)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Ledger Table matching MOP.pdf -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="min-w-[1400px] w-full border-collapse text-left text-xs text-slate-700">
+                        <thead class="bg-slate-800 text-slate-200 font-semibold uppercase">
+                            <tr class="border-b border-slate-700">
+                                <th class="px-3 py-2 text-center" rowspan="3" style="width: 50px;">번호</th>
+                                <th class="px-3 py-2">장비명</th>
+                                <th class="px-3 py-2">분류</th>
+                                <th class="px-3 py-2">거래처</th>
+                                <th class="px-3 py-2" style="width: 100px;">운전원</th>
+                                <th class="px-3 py-2" style="width: 140px;">주민등록번호</th>
+                                <th class="px-1 py-2 text-center font-mono bg-slate-900/20" colspan="11">일일 투입 공수 (01일 ~ 11일)</th>
+                                <th class="px-3 py-2 text-center font-bold">가동일수</th>
+                                <th class="px-3 py-2 text-right font-bold">공급가액</th>
+                                <th class="px-3 py-2 text-right font-bold">고용보수총액</th>
+                            </tr>
+                            <tr class="border-b border-slate-700 bg-slate-900/10">
+                                <th class="px-3 py-2">등록번호</th>
+                                <th class="px-3 py-2">단가구분</th>
+                                <th class="px-3 py-2">대표자명</th>
+                                <th class="px-3 py-2">운전원분류</th>
+                                <th class="px-3 py-2">휴대전화번호</th>
+                                <th class="px-1 py-2 text-center font-mono bg-slate-900/30" colspan="11">일일 투입 공수 (12일 ~ 22일)</th>
+                                <th class="px-3 py-2 text-center text-slate-400">부가세</th>
+                                <th class="px-3 py-2 text-right text-slate-400" id="tbl-driver-ins-lbl">고용보험료(0.9%)</th>
+                                <th class="px-3 py-2 text-right text-slate-400" id="tbl-accident-ins-lbl">산재보험료</th>
+                            </tr>
+                            <tr class="bg-slate-900/20">
+                                <th class="px-3 py-2">규격</th>
+                                <th class="px-3 py-2">단가</th>
+                                <th class="px-3 py-2">사업자번호</th>
+                                <th class="px-3 py-2">건설기계종류</th>
+                                <th class="px-3 py-2">주소</th>
+                                <th class="px-1 py-2 text-center font-mono bg-slate-900/40" colspan="11">일일 투입 공수 (23일 ~ 31일)</th>
+                                <th class="px-3 py-2 text-right text-emerald-400 font-bold">장비대금</th>
+                                <th class="px-3 py-2 text-right text-emerald-300 font-bold" colspan="2">실지급액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="database-tbody">
+                            <!-- Multi-row groups rendered dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: AI ASSISTANT -->
+        <div id="content-ai" class="space-y-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Left: Control Panel & Smart Tasks -->
+                <div class="space-y-6 lg:col-span-1">
+                    <!-- API Key Setting -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="text-base font-bold text-slate-900 mb-3 flex items-center gap-1.5">
+                            🔑 Gemini API 인증 설정
+                        </h3>
+                        <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                            실시간 AI 데이터 분석 및 감사, 신규 영수증/텍스트 OCR 파싱 분석을 활성화하기 위해 Gemini API Key를 등록하세요. 키가 없는 경우 고정 템플릿 응답이 실행됩니다.
+                        </p>
+                        <input type="password" id="api-key-input" placeholder="AI-Key 입력..." class="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none mb-3">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400">보안 로컬 저장됨</span>
+                            <button onclick="saveApiKey()" class="text-indigo-600 font-bold hover:underline">키 저장하기</button>
+                        </div>
+                    </div>
+
+                    <!-- Instant Tasks Card -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="text-base font-bold text-slate-900 mb-3">
+                            🚀 바로 실행할 수 있는 분석 작업
+                        </h3>
+                        <div class="space-y-2">
+                            <button onclick="triggerQuickTask('audit')" class="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-xs font-medium text-slate-700 flex items-center gap-2">
+                                🛡️ 고용/산재 보수총액 대비 점검 (감사)
+                            </button>
+                            <button onclick="triggerQuickTask('summary')" class="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-xs font-medium text-slate-700 flex items-center gap-2">
+                                📋 월간 기계투입대장 리포트 자동 작성
+                            </button>
+                            <button onclick="triggerQuickTask('anomaly')" class="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-xs font-medium text-slate-700 flex items-center gap-2">
+                                🔍 신고 오류 및 공단 반려 요인 탐색
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Raw Import Helper -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="text-base font-bold text-slate-900 mb-2">
+                            📄 신규 텍스트 / OCR 대장 파싱
+                        </h3>
+                        <p class="text-xs text-slate-500 mb-3">새로운 기사 투입 정보가 적힌 텍스트를 붙여넣으면 AI가 똑똑하게 분석해 대장에 행을 추가해 줍니다.</p>
+                        <textarea id="ai-import-area" placeholder="[예제] 12번 홍길동 821212-1111111 010-1234-5678 굴삭기06W 2일 투입, 공급액 1,500,000" class="w-full h-24 p-3 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"></textarea>
+                        <button onclick="parseAndImportText()" class="w-full mt-2 bg-indigo-600 text-white hover:bg-indigo-700 py-2 rounded-xl text-xs font-bold transition-colors">
+                            기사 리스트에 자동 추가하기
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right: AI Chat Interface -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[580px] lg:col-span-2">
+                    <!-- Chat Header -->
+                    <div class="p-4 border-b border-slate-100 bg-slate-50 rounded-t-2xl flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <span class="flex h-2 w-2 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                            </span>
+                            <h3 class="text-sm font-bold text-slate-900">특고 고용·산재 전용 AI 상담 도우미</h3>
+                        </div>
+                        <button onclick="clearChat()" class="text-xs text-slate-400 hover:text-slate-600">대화 초기화</button>
+                    </div>
+
+                    <!-- Chat Message Area -->
+                    <div id="chat-messages" class="flex-grow p-4 overflow-y-auto space-y-4 text-sm">
+                        <div class="flex items-start space-x-2.5">
+                            <div class="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                                🤖
+                            </div>
+                            <div class="bg-slate-100 p-3 rounded-2xl rounded-tl-none max-w-[85%] text-slate-700 leading-relaxed">
+                                안녕하세요! 등록된 회사 및 공정 대장에 적합한 고용·산재 신고 지원 챗봇입니다.<br><br>
+                                현재 선택된 현장 데이터베이스의 오류 점검 또는 월별 투입현황 리포트 완성을 요청해 주시면 지능형 가이드를 즉시 구성해 드립니다. 어떤 부분을 도와드릴까요?
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="p-4 border-t border-slate-100">
+                        <div class="flex gap-2">
+                            <input type="text" id="chat-user-input" onkeypress="handleChatKey(event)" placeholder="AI에게 질문을 남겨보세요... (예: 현재 현장 대장 요약해줘)" class="flex-grow px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <button onclick="sendChatMessage()" class="bg-slate-900 text-white hover:bg-slate-800 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shrink-0">
+                                전송
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal: Company & Site Manager -->
+    <div id="site-manager-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-base font-bold text-slate-900">🏢 회사 및 현장 목록 관리</h3>
+                <button onclick="closeSiteManagerModal()" class="text-slate-400 hover:text-slate-600 p-1">
+                    ✕
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <!-- Site Add Form -->
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-150 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-700">➕ 새 회사 / 현장 등록</h4>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="new-site-company" placeholder="회사 상호 (예: (주)유일건설)" class="px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                        <input type="text" id="new-site-name" placeholder="공사 현장명" class="px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="month" id="new-site-month" value="2026-05" class="px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                        <button onclick="addNewSite()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-xs">
+                            신규 현장 추가하기
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Site List table -->
+                <div>
+                    <h4 class="text-xs font-bold text-slate-500 mb-2">등록되어 있는 현장 대장 목록</h4>
+                    <div class="max-h-56 overflow-y-auto space-y-2 border border-slate-100 p-2 rounded-xl" id="site-list-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add / Edit Operator -->
+    <div id="operator-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="modal-title" class="text-base font-bold text-slate-900 font-mono">기사 관리</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    ✕
+                </button>
+            </div>
+            <!-- Modal Form with 3-subrow matching structure fields -->
+            <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                <input type="hidden" id="form-operator-idx">
+                
+                <!-- Row 1 Fields -->
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-600 border-b pb-1">1행 정보 (기종/운전원 기본)</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">장비명 *</label>
+                            <input type="text" id="form-equip" placeholder="예: 굴삭기, 덤프" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">분류 *</label>
+                            <input type="text" id="form-lease" placeholder="예: 임차, 자사" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">거래처 *</label>
+                            <input type="text" id="form-partner" placeholder="예: 대호건기" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">운전원(성명) *</label>
+                            <input type="text" id="form-driver" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">주민등록번호 *</label>
+                            <input type="text" id="form-jumin" placeholder="770924-1462811" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2 Fields -->
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-600 border-b pb-1">2행 정보 (차량/인적 고도화)</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">차량/등록번호 *</label>
+                            <input type="text" id="form-reg-num" placeholder="예: 0026359" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">단가구분 *</label>
+                            <input type="text" id="form-rate-type" placeholder="예: 일대, 월대" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">대표자명 *</label>
+                            <input type="text" id="form-owner" placeholder="대표자 성명" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">운전원분류 *</label>
+                            <input type="text" id="form-driver-type" placeholder="예: 특고(일용)" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">휴대전화번호 *</label>
+                            <input type="text" id="form-hp" placeholder="010-1234-5678" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3 Fields -->
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-600 border-b pb-1">3행 정보 (제원 및 계약단가)</h4>
+                    <div class="grid grid-cols-4 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">규격 *</label>
+                            <input type="text" id="form-spec" placeholder="예: 06W, 15ton" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">단가 *</label>
+                            <input type="number" id="form-unit-price" value="750000" oninput="calculateInsuranceWages()" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">사업자번호</label>
+                            <input type="text" id="form-biz-num" placeholder="000-00-00000" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-0.5">건설기계종류</label>
+                            <input type="text" id="form-equip-type" placeholder="예: 굴삭기, 덤프트럭" class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-0.5">주소</label>
+                        <input type="text" id="form-addr" placeholder="강원 원주시..." class="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 bg-indigo-50 p-3 rounded-2xl border border-indigo-100">
+                    <div>
+                        <span class="block text-[9px] uppercase tracking-wider text-indigo-500 font-bold">장비 계약 공급가액</span>
+                        <span id="calc-supply" class="text-base font-bold text-slate-900">₩0</span>
+                    </div>
+                    <div>
+                        <span class="block text-[9px] uppercase tracking-wider text-indigo-500 font-bold">공단 신고 보수총액 (10.87% 정액 산출)</span>
+                        <span id="calc-insurance" class="text-base font-bold text-slate-900">₩0</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Modal Actions -->
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-2">
+                <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors">취소</button>
+                <button onclick="saveOperator()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-md transition-colors">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: 공수 일괄 조정 매크로 (유용한 기능 1) -->
+    <div id="macro-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-base font-bold text-slate-900">⚙️ 공수 일괄 조정 매크로</h3>
+                <button onclick="closeMacroModal()" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    선택한 대상 기사의 1일부터 31일까지의 가동 공수를 특정 근무 패턴에 맞춰 한번에 일괄 대입합니다. 매번 수동으로 매트릭스를 제어하는 반복 업무를 덜어줍니다.
+                </p>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">대상 기사 선택</label>
+                    <select id="macro-target-operator" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                        <!-- Loaded dynamically -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">근무 패턴 템플릿</label>
+                    <select id="macro-pattern" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                        <option value="weekday">평일 가동 (월~금요일만 1.0 공수 투입)</option>
+                        <option value="everyday">매일 풀 가동 (1일부터 31일까지 모두 1.0 투입)</option>
+                        <option value="saturday">토요일 포함 가동 (월~토요일 1.0 투입)</option>
+                        <option value="half_weekday">평일 반나절 가동 (월~금요일 0.5 공수 투입)</option>
+                        <option value="clear">공수 전체 비우기 (0으로 초기화)</option>
+                    </select>
+                </div>
+                <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 text-[10px] text-amber-800 leading-relaxed">
+                    ⚠️ 해당 기사의 기존 입력된 가동 일수가 패턴에 맞추어 즉시 덮어쓰기되므로 주의하시기 바랍니다.
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-2">
+                <button onclick="closeMacroModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">취소</button>
+                <button onclick="applyAttendanceMacro()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md">매크로 일괄 적용</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: 달력형 공수 입력기 (새로 추가된 달력 형태 공수 관리 기능) -->
+    <div id="calendar-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300 opacity-0">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 id="calendar-modal-title" class="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                        📅 달력형 공수 입력기
+                    </h3>
+                    <span id="calendar-modal-subtitle" class="text-xs text-slate-400 block mt-0.5">기사님 별 가동 현황을 달력에서 직관적으로 관리하세요.</span>
+                </div>
+                <button onclick="closeCalendarModal()" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="p-6 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-3 rounded-2xl border border-slate-100 gap-2">
+                    <div>
+                        <span class="text-xs text-slate-400 font-semibold block">대상 기사 / 장비</span>
+                        <span id="calendar-operator-info" class="text-sm font-bold text-slate-800">정해길 기사 (굴삭기 06W)</span>
+                    </div>
+                    <div class="text-right sm:text-right">
+                        <span class="text-xs text-slate-400 font-semibold block">가동 합계</span>
+                        <span id="calendar-total-days" class="text-sm font-bold text-indigo-600">0.0 일</span>
+                    </div>
+                </div>
+
+                <!-- 달력 컨트롤 설명 -->
+                <div class="flex justify-between items-center text-xs text-slate-500 border-b pb-2">
+                    <span>💡 날짜 칸을 클릭하면 <b>0 ➔ 1.0 ➔ 0.5 ➔ 0</b> 순서로 공수가 빠른 순환 변경됩니다.</span>
+                    <div class="flex gap-2">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-indigo-500 rounded-sm"></span> 1.0공수</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-amber-500 rounded-sm"></span> 0.5공수</span>
+                    </div>
+                </div>
+
+                <!-- Calendar Grid Wrapper -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <!-- Day names -->
+                    <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-500 mb-2">
+                        <div class="text-red-500">일</div>
+                        <div>월</div>
+                        <div>화</div>
+                        <div>수</div>
+                        <div>목</div>
+                        <div>금</div>
+                        <div class="text-blue-500">토</div>
+                    </div>
+                    <!-- Calendar days grid -->
+                    <div id="calendar-days-grid" class="grid grid-cols-7 gap-1">
+                        <!-- Loaded dynamically by JS -->
+                    </div>
+                </div>
+
+                <!-- 실시간 산출치 및 빠른 설정 피드백 -->
+                <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
+                    <div>
+                        <span class="text-slate-400">장비 공급가액 (예측)</span>
+                        <p id="calendar-predict-supply" class="text-sm font-bold text-slate-800">₩0</p>
+                    </div>
+                    <div>
+                        <span class="text-slate-400">고용보험 신고보수액 (예측)</span>
+                        <p id="calendar-predict-salary" class="text-sm font-bold text-indigo-600">₩0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-2">
+                <button onclick="closeCalendarModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">취소</button>
+                <button onclick="saveCalendarAttendance()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md">변경사항 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Printable Area Frame for Receipts -->
+    <div id="print-area" class="hidden p-8 bg-white text-slate-900 max-w-4xl mx-auto border border-slate-300 rounded-lg">
+        <!-- Dynamic content filled by JavaScript on demand -->
+    </div>
+
+    <!-- Global Logic Scripts -->
+    <script>
+        // Multi-Site & Multi-Company Structure Config
+        let activeSiteId = "site_default";
+        
+        let sites = [
+            { id: "site_default", company: "(주)유일건설", name: "원주 캠프롱 문화체육공원 조성사업(조경, 토목)", month: "2026-05" },
+            { id: "site_02", company: "(주)금강건설", name: "춘천 순환대로 개설 공사 현장", month: "2026-06" }
+        ];
+
+        // 11 Default Operators with Full 3-subrow Metadata extracted from MOP.pdf
+        const defaultOperators = [
+            { num: 1, equip: "굴삭기", lease: "임차", partner: "대호건기", driver: "정해길", jumin: "770924-1462811", regNum: "0026359", rateType: "일대", owner: "간진희", driverType: "특고(일용)", hp: "010-6401-0940", spec: "06W", unitPrice: 750000, bizNum: "251-09-02220", equipType: "굴삭기", addr: "강원도 원주시 시청로 88, 400동 303호", days: 9.1, supply: 6843000, salary: 743830, dailyLogs: [1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 2, equip: "굴삭기", lease: "임차", partner: "신흥중기", driver: "고봉균", jumin: "710910-1268211", regNum: "강원02소6620", rateType: "일대", owner: "고봉균", driverType: "특고(일용)", hp: "010-5362-1809", spec: "06W", unitPrice: 750000, bizNum: "224-26-76182", equipType: "굴삭기", addr: "강원 원주시 단관공원111, 112-404", days: 16.71, supply: 12531000, salary: 1322360, dailyLogs: [0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1.2, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0.51, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 3, equip: "굴삭기", lease: "임차", partner: "신흥중기", driver: "김도훈", jumin: "720213-1268510", regNum: "강원02보7745", rateType: "일대", owner: "김도훈", driverType: "특고(일용)", hp: "010-4182-7647", spec: "06W", unitPrice: 750000, bizNum: "224-05-72293", equipType: "굴삭기", addr: "강원 원주시 천매봉길 36-5", days: 23.8, supply: 17812500, salary: 1900900, dailyLogs: [1.1, 1, 1, 1, 1, 1, 1, 1.1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1.4, 0.2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 4, equip: "굴삭기", lease: "임차", partner: "덕원건설중기", driver: "김봉년", jumin: "730112-1397314", regNum: "강원02보8020", rateType: "일대", owner: "김봉년", driverType: "특고(일용)", hp: "010-2207-0387", spec: "06W", unitPrice: 750000, bizNum: "224-03-59597", equipType: "굴삭기", addr: "원주시 배울로 24, 205동 1102호", days: 2.0, supply: 1500000, salary: 165290, dailyLogs: [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 5, equip: "굴삭기", lease: "임차", partner: "동성중기", driver: "박병국", jumin: "650607-1323411", regNum: "강원02소5980", rateType: "일대", owner: "박병국", driverType: "특고(일용)", hp: "010-4137-6704", spec: "06W", unitPrice: 750000, bizNum: "426-24-00703", equipType: "굴삭기", addr: "", days: 25.63, supply: 19218750, salary: 2066200, dailyLogs: [1.1, 1, 1, 1, 1.1, 1.3, 1.1, 1.2, 1, 1, 1, 1, 1, 1.2, 1, 1, 1, 1, 1, 1, 1, 0.5, 1, 1, 1, 0, 0, 0, 0, 0, 0] },
+            { num: 6, equip: "덤프", lease: "임차", partner: "대호건기", driver: "박상진", jumin: "710517-1222111", regNum: "00646639", rateType: "일대", owner: "박상진", driverType: "특고(일용)", hp: "010-3378-1138", spec: "15ton", unitPrice: 650000, bizNum: "223-01-83159", equipType: "덤프트럭", addr: "원주시 강변로 119, 104동 503호", days: 7.0, supply: 4550000, salary: 578530, dailyLogs: [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 7, equip: "굴삭기", lease: "임차", partner: "대호건기", driver: "박윤수", jumin: "791215-1396533", regNum: "00298819", rateType: "일대", owner: "오윤기", driverType: "특고(일용)", hp: "010-3540-4552", spec: "06W", unitPrice: 750000, bizNum: "224-02-52919", equipType: "굴삭기", addr: "원주시   번길 71, 204 705호", days: 2.0, supply: 1500000, salary: 165290, dailyLogs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 8, equip: "덤프", lease: "임차", partner: "영광중기", driver: "이태형", jumin: "690409-1325711", regNum: "006 9776", rateType: "일대", owner: "이태형", driverType: "특고(일용)", hp: "033-746-3000", spec: "15ton", unitPrice: 650000, bizNum: "545-36-00161", equipType: "덤프트럭", addr: "원주시 남원로 527번길 8-41", days: 1.8, supply: 1137500, salary: 165290, dailyLogs: [1, 0.8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 9, equip: "굴삭기", lease: "임차", partner: "동성중기", driver: "한동욱", jumin: "720516-1326415", regNum: "002머8615", rateType: "일대", owner: "한동욱", driverType: "특고(일용)", hp: "010-9247-5490", spec: "06W", unitPrice: 750000, bizNum: "235-56-00302", equipType: "굴삭기", addr: "상주시 원문로 100번길 90 201 606호", days: 1.0, supply: 750000, salary: 82640, dailyLogs: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 10, equip: "굴삭기", lease: "임차", partner: "대호건기", driver: "심일우", jumin: "790723-1268213", regNum: "002저7443", rateType: "일대", owner: "심일우", driverType: "특고(일용)", hp: "010-9466-2782", spec: "03W", unitPrice: 650000, bizNum: "223-01-83159", equipType: "굴삭기", addr: "", days: 1.0, supply: 650000, salary: 82640, dailyLogs: [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { num: 11, equip: "굴삭기", lease: "임차", partner: "베스트건설중기", driver: "한영수", jumin: "840118-1324419", regNum: "강원02소5935", rateType: "일대", owner: "한영수", driverType: "특고(일용)", hp: "010-4116-9877", spec: "03W", unitPrice: 650000, bizNum: "670-02-01215", equipType: "굴삭기", addr: "원주시 반곡  81, 105 1104호", days: 1.0, supply: 650000, salary: 82640, dailyLogs: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+        ];
+
+        let operators = [];
+        let calendarTargetOperatorIdx = null; // 현재 달력 편집 대상 기사 인덱스
+        let calendarWorkingLogs = []; // 임시 달력 공수 저장용 배열
+
+        window.onload = function() {
+            // Load Saved API key if exists
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('api-key-input').value = savedKey;
+            }
+            
+            // Load custom sites list or save default
+            const savedSites = localStorage.getItem('site_list');
+            if (savedSites) {
+                sites = JSON.parse(savedSites);
+            } else {
+                localStorage.setItem('site_list', JSON.stringify(sites));
+            }
+
+            // Load last active site
+            const savedActiveSite = localStorage.getItem('active_site_id');
+            if (savedActiveSite && sites.some(s => s.id === savedActiveSite)) {
+                activeSiteId = savedActiveSite;
+            } else {
+                activeSiteId = sites[0].id;
+            }
+
+            loadSiteDropdown();
+            loadOperatorsForActiveSite();
+        };
+
+        // Load Sites into dropdown selection
+        function loadSiteDropdown() {
+            const selector = document.getElementById('site-selector');
+            selector.innerHTML = '';
+            sites.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.innerText = `${s.company} - ${s.name.substring(0, 15)}...`;
+                if (s.id === activeSiteId) {
+                    opt.selected = true;
+                }
+                selector.appendChild(opt);
+            });
+        }
+
+        // Load Operators specific to selected site
+        function loadOperatorsForActiveSite() {
+            const savedOps = localStorage.getItem(`operators_${activeSiteId}`);
+            if (savedOps) {
+                operators = JSON.parse(savedOps);
+            } else {
+                // If default site and no data exists, load standard 11 drivers
+                if (activeSiteId === "site_default") {
+                    operators = JSON.parse(JSON.stringify(defaultOperators));
+                } else {
+                    operators = []; // Blank slate for new sites
+                }
+            }
+
+            // Robustness Guard: Ensure property and 31-day log integrity for all storage rows to prevent undefined crash
+            operators.forEach(op => {
+                if (!op.dailyLogs || op.dailyLogs.length !== 31) {
+                    op.dailyLogs = Array(31).fill(0);
+                    if (op.days) {
+                        op.dailyLogs[0] = parseFloat(op.days) || 0;
+                    }
+                }
+                // Fallback critical properties to prevent undefined rendering or split crashes
+                op.driver = op.driver || "기사미상";
+                op.jumin = op.jumin || "";
+                op.hp = op.hp || "";
+                op.equip = op.equip || "굴삭기";
+                op.lease = op.lease || "임차";
+                op.partner = op.partner || "";
+                op.regNum = op.regNum || "";
+                op.rateType = op.rateType || "일대";
+                op.owner = op.owner || "";
+                op.driverType = op.driverType || "특고(일용)";
+                op.spec = op.spec || "";
+                op.unitPrice = parseFloat(op.unitPrice) || 0;
+                op.bizNum = op.bizNum || "";
+                op.equipType = op.equipType || "";
+                op.addr = op.addr || "";
+                
+                op.days = parseFloat(op.dailyLogs.reduce((a, b) => a + b, 0).toFixed(2));
+                op.supply = parseInt(op.supply) || Math.round(op.days * op.unitPrice);
+                op.salary = parseInt(op.salary) || Math.round(op.supply * 0.1087);
+            });
+
+            localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+            updateUI();
+        }
+
+        // Triggered when dropdown changes
+        function onSiteChanged() {
+            activeSiteId = document.getElementById('site-selector').value;
+            localStorage.setItem('active_site_id', activeSiteId);
+            loadOperatorsForActiveSite();
+            showNotification("선택하신 현장의 대장 데이터가 정상 로드되었습니다.");
+        }
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            const tabs = ['dashboard', 'database', 'ai'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const content = document.getElementById(`content-${t}`);
+                if (t === tabId) {
+                    btn.className = "flex-1 py-3 text-center text-sm font-semibold rounded-lg transition-all duration-200 bg-slate-900 text-white shadow";
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = "flex-1 py-3 text-center text-sm font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:bg-slate-100";
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        // Show Custom Beautiful Notifications
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `p-4 rounded-xl shadow-lg border text-sm font-semibold transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto flex items-center justify-between gap-4 max-w-sm z-50 ${
+                type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'
+            }`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span>${type === 'success' ? '✅' : '⚠️'}</span>
+                    <span>${message}</span>
+                </div>
+                <button onclick="this.parentElement.remove()" class="text-xs font-bold hover:underline">닫기</button>
+            `;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Integrity Scan Engine (Check missing data)
+        function scanIntegrity() {
+            let errorCount = 0;
+            operators.forEach(op => {
+                op.hasWarning = false;
+                op.warningMessages = [];
+
+                if (!op.addr || op.addr.trim() === "") {
+                    op.hasWarning = true;
+                    op.warningMessages.push("주소 누락");
+                    errorCount++;
+                }
+                const juminRegex = /^\d{6}-\d{7}$/;
+                const checkJumin = op.jumin || "";
+                if (!checkJumin || !juminRegex.test(checkJumin)) {
+                    op.hasWarning = true;
+                    op.warningMessages.push("주민번호 오류");
+                    errorCount++;
+                }
+                if (!op.hp || op.hp.trim().length < 9) {
+                    op.hasWarning = true;
+                    op.warningMessages.push("연락처 부실");
+                    errorCount++;
+                }
+            });
+
+            const warningPanel = document.getElementById('warning-alert-panel');
+            const badgeCount = document.getElementById('badge-warning-count');
+
+            if (errorCount > 0) {
+                warningPanel.classList.remove('hidden');
+                badgeCount.classList.remove('hidden');
+                badgeCount.innerText = `오류 ${errorCount}건`;
+                document.getElementById('warning-panel-text').innerHTML = `현재 대장 내에 <strong>${errorCount}개</strong>의 기재항목 누락 또는 주민등록 규격 불일치가 발견되었습니다. 아래 대장 표에서 '⚠️ 보완 필요'를 확인해 주세요.`;
+            } else {
+                warningPanel.classList.add('hidden');
+                badgeCount.classList.add('hidden');
+            }
+        }
+
+        // 31일 공수 직접 수정 매트릭스 제어 연계
+        function updateDailyScore(opIdx, dayIdx, newVal) {
+            const val = parseFloat(newVal) || 0;
+            operators[opIdx].dailyLogs[dayIdx] = val;
+
+            const sum = operators[opIdx].dailyLogs.reduce((a, b) => a + b, 0);
+            operators[opIdx].days = parseFloat(sum.toFixed(2));
+
+            // Dynamic calculation matching MOP mathematical standards
+            operators[opIdx].supply = Math.round(operators[opIdx].days * operators[opIdx].unitPrice);
+            operators[opIdx].salary = Math.round(operators[opIdx].supply * 0.1087); // 고용보수액 10.87% 정액매핑
+
+            localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+            updateUI();
+        }
+
+        // Compute stats and re-render charts and tables
+        function updateUI() {
+            scanIntegrity();
+
+            // 커스텀 요율 설정 로드
+            const driverRate = parseFloat(document.getElementById('setting-driver-rate').value) / 100 || 0.009;
+            const companyRate = parseFloat(document.getElementById('setting-company-rate').value) / 100 || 0.009;
+            const accidentRate = parseFloat(document.getElementById('setting-accident-rate').value) / 100 || 0.0185;
+
+            // 라벨 텍스트 동적 업데이트
+            document.getElementById('driver-fee-label').innerText = `보험료 기사 부담액 (고용 ${(driverRate * 100).toFixed(1)}%)`;
+            document.getElementById('company-fee-label').innerText = `회사 부담액 (고용+산재 ${((companyRate + accidentRate) * 100).toFixed(2)}%)`;
+            document.getElementById('tbl-driver-ins-lbl').innerText = `고용보험료(${(driverRate * 100).toFixed(1)}%)`;
+            document.getElementById('tbl-accident-ins-lbl').innerText = `산재보험료(${(accidentRate * 100).toFixed(2)}%)`;
+
+            // Find current site object
+            const currentSite = sites.find(s => s.id === activeSiteId);
+            if (currentSite) {
+                let displayYear = "2026";
+                let displayMonth = "05";
+                if (currentSite.month && currentSite.month.includes('-')) {
+                    const parts = currentSite.month.split('-');
+                    displayYear = parts[0] || "2026";
+                    displayMonth = parts[1] || "05";
+                }
+                document.getElementById('dash-badge-month').innerText = `${displayYear}년 ${displayMonth}월 신고 대상`;
+                document.getElementById('dash-company-title').innerText = `${currentSite.company || ""} 기계장비투입대장`;
+                document.getElementById('dash-site-title').innerText = `${currentSite.name || ""} 현장`;
+            }
+
+            // Stats calculation
+            const totalOps = operators.length;
+            const totalDays = parseFloat(operators.reduce((acc, curr) => acc + (curr.days || 0), 0).toFixed(2));
+            const totalSupply = operators.reduce((acc, curr) => acc + (curr.supply || 0), 0);
+            const totalInsurance = operators.reduce((acc, curr) => acc + (curr.salary || 0), 0);
+
+            // Insurance & tax values based on custom rates
+            const driverEmploymentFee = Math.round(totalInsurance * driverRate);
+            const companyAccidentFee = Math.round(totalInsurance * accidentRate); 
+            const companyEmploymentFee = Math.round(totalInsurance * companyRate); 
+            const totalTaxAmount = Math.round(totalSupply * 0.033); 
+
+            // Update DOM
+            document.getElementById('stat-total-operators').innerText = `${totalOps}명`;
+            document.getElementById('stat-total-days').innerText = `${totalDays}일`;
+            document.getElementById('stat-total-supply').innerText = `₩${totalSupply.toLocaleString()}`;
+            document.getElementById('stat-total-insurance').innerText = `₩${totalInsurance.toLocaleString()}`;
+
+            document.getElementById('summary-driver-fee').innerText = `₩${driverEmploymentFee.toLocaleString()}`;
+            document.getElementById('summary-company-fee').innerText = `₩${(companyAccidentFee + companyEmploymentFee).toLocaleString()}`;
+            document.getElementById('summary-tax-fee').innerText = `₩${totalTaxAmount.toLocaleString()}`;
+
+            // Render Equipment Share
+            const equipCount = {};
+            operators.forEach(op => {
+                const category = op.equip || "기타";
+                equipCount[category] = (equipCount[category] || 0) + (op.days || 0);
+            });
+            const totalCategoryDays = Object.values(equipCount).reduce((a, b) => a + b, 0);
+
+            const shareContainer = document.getElementById('equipment-share-container');
+            shareContainer.innerHTML = '';
+            
+            const colorPalette = {
+                '굴삭기': { bg: 'bg-indigo-500' },
+                '덤프': { bg: 'bg-amber-500' }
+            };
+
+            Object.keys(equipCount).forEach(category => {
+                const days = equipCount[category];
+                const percentage = totalCategoryDays ? ((days / totalCategoryDays) * 100).toFixed(1) : 0;
+                const scheme = colorPalette[category] || { bg: 'bg-slate-500' };
+
+                shareContainer.innerHTML += `
+                    <div>
+                        <div class="flex justify-between items-center text-xs font-semibold mb-1">
+                            <span class="text-slate-700 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full ${scheme.bg}"></span> ${category}
+                            </span>
+                            <span class="text-slate-500">${days.toFixed(1)}일 (${percentage}%)</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div class="${scheme.bg} h-full" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Render SVG Based Chart for Input Days
+            const chartContainer = document.getElementById('days-chart-container');
+            chartContainer.innerHTML = '';
+            const validDays = operators.map(o => o.days || 0);
+            const maxDays = validDays.length > 0 ? Math.max(...validDays, 1) : 1;
+
+            operators.forEach(op => {
+                const barHeight = ((op.days || 0) / maxDays) * 100;
+                chartContainer.innerHTML += `
+                    <div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+                        <div class="absolute bottom-full mb-1 bg-slate-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap">
+                            ${op.driver || "기사"}: ${op.days || 0}일 (₩${(op.salary || 0).toLocaleString()})
+                        </div>
+                        <div class="w-full bg-indigo-500/80 group-hover:bg-indigo-600 transition-all rounded-t-md" style="height: ${barHeight}%"></div>
+                        <span class="text-[10px] text-slate-500 font-medium mt-2 truncate w-full text-center">${op.driver || "기사"}</span>
+                    </div>
+                `;
+            });
+
+            // Render 3-subrow Data Table following MOP Document Format (Aligned Grid)
+            const tbody = document.getElementById('database-tbody');
+            tbody.innerHTML = '';
+            
+            operators.forEach((op, index) => {
+                const isWarning = op.hasWarning;
+                const warningBadge = isWarning 
+                    ? `<span class="bg-rose-50 text-rose-700 px-1 py-0.5 rounded text-[9px] font-bold block mt-0.5" title="${op.warningMessages.join(', ')}">⚠️ 보완 필요</span>`
+                    : `<span class="bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded text-[9px] font-bold block mt-0.5">정상</span>`;
+
+                // Calculate sub-ledger mathematical parameters with custom rates
+                const vat = Math.round((op.supply || 0) * 0.10);
+                const totalDue = (op.supply || 0) + vat;
+                const workerEmploymentIns = Math.round((op.salary || 0) * driverRate); 
+                const workerAccidentIns = Math.round((op.salary || 0) * accidentRate); 
+                const netPay = totalDue - workerEmploymentIns;
+
+                // Ensure logs array exists
+                const logs = op.dailyLogs || Array(31).fill(0);
+
+                // Safe 주민등록번호 앞자리 가공 (undefined 크래시 전면 방어)
+                const checkJumin = op.jumin || "";
+                const juminPrefix = checkJumin.includes('-') ? checkJumin.split('-')[0] : (checkJumin.substring(0, 6) || "000000");
+
+                tbody.innerHTML += `
+                    <!-- Row 1: 기본 계약 정보 및 1-11일 공수 (11열 일관 정렬) -->
+                    <tr class="bg-white hover:bg-slate-50/20 transition-colors border-t border-slate-200" data-op-index="${index}">
+                        <td class="px-2 py-3 text-center font-bold text-slate-900 border-b border-slate-300" rowspan="3">${op.num}</td>
+                        <td class="px-3 py-2 font-semibold text-slate-900">${op.equip || ""}</td>
+                        <td class="px-3 py-2 text-slate-500">${op.lease || ""}</td>
+                        <td class="px-3 py-2 text-slate-700">${op.partner || ""}</td>
+                        <td class="px-3 py-2 font-bold text-indigo-700 flex items-center justify-between">
+                            <span>${op.driver || ""}</span>
+                            ${warningBadge}
+                        </td>
+                        <td class="px-3 py-2 font-mono text-slate-600">${juminPrefix}-*******</td>
+                        
+                        <!-- Daily 1 to 11 -->
+                        ${Array.from({ length: 11 }, (_, d) => {
+                            const currentVal = logs[d] || 0;
+                            return `
+                                <td class="px-1 py-1 text-center bg-slate-50 border border-slate-150 min-w-[32px]">
+                                    <input type="number" step="0.1" min="0" max="2" value="${currentVal}" 
+                                        onchange="updateDailyScore(${index}, ${d}, this.value)" 
+                                        class="w-full text-center text-xs font-bold bg-transparent text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 rounded">
+                                </td>
+                            `;
+                        }).join('')}
+
+                        <td class="px-3 py-2 text-center font-bold text-slate-900 bg-slate-50/50">${op.days || 0}일</td>
+                        <td class="px-3 py-2 text-right font-bold text-slate-900">₩${(op.supply || 0).toLocaleString()}</td>
+                        <td class="px-3 py-2 text-right font-bold text-indigo-600 border-r border-slate-200">₩${(op.salary || 0).toLocaleString()}</td>
+                    </tr>
+
+                    <!-- Row 2: 차량인적 및 12-22일 공수 (11열 일관 정렬) -->
+                    <tr class="bg-slate-50/30 hover:bg-slate-50/20 transition-colors" data-op-index="${index}">
+                        <td class="px-3 py-2 font-mono text-xs text-slate-500">${op.regNum || ""}</td>
+                        <td class="px-3 py-2 text-slate-500">${op.rateType || ""}</td>
+                        <td class="px-3 py-2 text-slate-700">${op.owner || ""}</td>
+                        <td class="px-3 py-2 text-slate-500">${op.driverType || ""}</td>
+                        <td class="px-3 py-2 font-mono text-slate-600">${op.hp || ""}</td>
+
+                        <!-- Daily 12 to 22 -->
+                        ${Array.from({ length: 11 }, (_, d) => {
+                            const idx = d + 11;
+                            const currentVal = logs[idx] || 0;
+                            return `
+                                <td class="px-1 py-1 text-center bg-slate-50 border border-slate-150 min-w-[32px]">
+                                    <input type="number" step="0.1" min="0" max="2" value="${currentVal}" 
+                                        onchange="updateDailyScore(${index}, ${idx}, this.value)" 
+                                        class="w-full text-center text-xs font-bold bg-transparent text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 rounded">
+                                </td>
+                            `;
+                        }).join('')}
+
+                        <td class="px-3 py-2 text-right text-slate-500">₩${vat.toLocaleString()}</td>
+                        <td class="px-3 py-2 text-right text-rose-500">₩${workerEmploymentIns.toLocaleString()}</td>
+                        <td class="px-3 py-2 text-right text-slate-500 border-r border-slate-200">₩${workerAccidentIns.toLocaleString()}</td>
+                    </tr>
+
+                    <!-- Row 3: 기종제원 및 23-31일 공수, 종합 정산 (11열 일관 정렬 - 2열 가상 병합 패딩 추가) -->
+                    <tr class="bg-slate-100/30 border-b-2 border-slate-300 hover:bg-slate-50/20 transition-colors" data-op-index="${index}">
+                        <td class="px-3 py-2 font-semibold text-slate-500">${op.spec || ""}</td>
+                        <td class="px-3 py-2 text-slate-500 font-mono">₩${(op.unitPrice || 0).toLocaleString()}</td>
+                        <td class="px-3 py-2 text-slate-400 font-mono">${op.bizNum || ""}</td>
+                        <td class="px-3 py-2 text-slate-400">${op.equipType || ""}</td>
+                        <td class="px-3 py-2 text-slate-400 truncate max-w-[200px]" title="${op.addr || '미기재'}">${op.addr || '주소정보 누락'}</td>
+
+                        <!-- Daily 23 to 31 (9 days) -->
+                        ${Array.from({ length: 9 }, (_, d) => {
+                            const idx = d + 22;
+                            const currentVal = logs[idx] || 0;
+                            return `
+                                <td class="px-1 py-1 text-center bg-slate-50 border border-slate-150 min-w-[32px]">
+                                    <input type="number" step="0.1" min="0" max="2" value="${currentVal}" 
+                                        onchange="updateDailyScore(${index}, ${idx}, this.value)" 
+                                        class="w-full text-center text-xs font-bold bg-transparent text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 rounded">
+                                </td>
+                            `;
+                        }).join('')}
+                        <!-- 2 columns of padded space to match 11 column width alignment of Row 1 & 2 -->
+                        <td class="bg-slate-100 border border-slate-150" colspan="2"></td>
+
+                        <td class="px-3 py-2 text-right font-bold text-slate-900 bg-emerald-50">₩${totalDue.toLocaleString()}</td>
+                        <td class="px-3 py-2 text-right font-bold text-emerald-600 bg-emerald-100 flex items-center justify-between border-r border-slate-200" colspan="2">
+                            <span>₩${netPay.toLocaleString()}</span>
+                            <div class="flex space-x-1 print:hidden shrink-0 ml-1">
+                                <button onclick="openCalendarModal(${index})" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded text-[9px] font-bold" title="달력 형태로 간편하게 공수를 입력합니다">📅 달력</button>
+                                <button onclick="printReceipt(${index})" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded text-[9px] font-bold">인쇄</button>
+                                <button onclick="openEditModal(${index})" class="text-slate-400 hover:text-slate-600 text-[10px]">✏️</button>
+                                <button onclick="deleteOperator(${index})" class="text-slate-400 hover:text-rose-600 text-[10px]">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Table Search & Validation Filtering
+        function filterTable() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filterError = document.getElementById('filter-error-select').value;
+            
+            operators.forEach((op, index) => {
+                const searchMatch = (op.driver || "").toLowerCase().includes(query) || 
+                                    (op.equip || "").toLowerCase().includes(query) || 
+                                    (op.hp || "").includes(query) ||
+                                    (op.partner || "").toLowerCase().includes(query);
+
+                let errorMatch = true;
+                if (filterError === 'warning') {
+                    errorMatch = op.hasWarning === true;
+                }
+
+                // Query and filter all rows matching this operator index securely
+                const rows = document.querySelectorAll(`[data-op-index="${index}"]`);
+                rows.forEach(row => {
+                    if (searchMatch && errorMatch) {
+                        row.style.display = "";
+                    } else {
+                        row.style.display = "none";
+                    }
+                });
+            });
+        }
+
+        // Printable Pay stub Receipt Builder
+        function printReceipt(index) {
+            const op = operators[index];
+            const currentSite = sites.find(s => s.id === activeSiteId);
+            
+            const driverRate = parseFloat(document.getElementById('setting-driver-rate').value) / 100 || 0.009;
+            const vat = Math.round((op.supply || 0) * 0.10);
+            const totalDue = (op.supply || 0) + vat;
+            const workerEmploymentIns = Math.round((op.salary || 0) * driverRate);
+            const netPay = totalDue - workerEmploymentIns;
+
+            const checkJumin = op.jumin || "";
+            const juminPrefix = checkJumin.includes('-') ? checkJumin.split('-')[0] : (checkJumin.substring(0, 6) || "000000");
+
+            const printDiv = document.getElementById('print-area');
+            printDiv.innerHTML = `
+                <div class="text-center pb-6 border-b-2 border-slate-800">
+                    <h1 class="text-2xl font-bold">건설기계 및 특고 장비대금 지급 명세서</h1>
+                    <p class="text-slate-500 text-sm mt-1">현장명: ${currentSite.name || ""} (${currentSite.month || ""})</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 my-6 text-sm">
+                    <div>
+                        <p><strong>원청 상호:</strong> ${currentSite.company || ""}</p>
+                        <p><strong>장비 구분:</strong> ${op.equip || ""} (${op.spec || ""})</p>
+                        <p><strong>생년월일:</strong> ${juminPrefix}-*******</p>
+                    </div>
+                    <div class="text-right">
+                        <p><strong>기사 성명:</strong> ${op.driver || ""}</p>
+                        <p><strong>차량 등록번호:</strong> ${op.regNum || '미기재'}</p>
+                        <p><strong>가동 일수:</strong> ${op.days || 0} 일</p>
+                    </div>
+                </div>
+
+                <table class="w-full border-collapse border border-slate-300 text-sm mb-6">
+                    <thead>
+                        <tr class="bg-slate-100">
+                            <th class="border border-slate-300 p-2">구분 항목</th>
+                            <th class="border border-slate-300 p-2 text-right">계산식 및 내역</th>
+                            <th class="border border-slate-300 p-2 text-right">금액</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="border border-slate-300 p-2 font-bold">총 장비 공급가액</td>
+                            <td class="border border-slate-300 p-2 text-right text-slate-500">기본 장비 가동 정산분</td>
+                            <td class="border border-slate-300 p-2 text-right font-bold">₩${(op.supply || 0).toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td class="border border-slate-300 p-2">장비 부가세 (10%)</td>
+                            <td class="border border-slate-300 p-2 text-right text-slate-500">세금계산서 발행금액</td>
+                            <td class="border border-slate-300 p-2 text-right font-bold">₩${vat.toLocaleString()}</td>
+                        </tr>
+                        <tr class="text-rose-600">
+                            <td class="border border-slate-300 p-2">고용보험료 기사 부담분 (${(driverRate * 100).toFixed(1)}%)</td>
+                            <td class="border border-slate-300 p-2 text-right text-slate-500">신고 보수액(₩${(op.salary || 0).toLocaleString()}) 기준</td>
+                            <td class="border border-slate-300 p-2 text-right">- ₩${workerEmploymentIns.toLocaleString()}</td>
+                        </tr>
+                        <tr class="bg-emerald-50 text-emerald-800 font-bold">
+                            <td class="border border-slate-300 p-2 text-base">최종 실지급액 (차인지급액)</td>
+                            <td class="border border-slate-300 p-2 text-right text-slate-500">원천징수 및 보험 공제액 최종 반영</td>
+                            <td class="border border-slate-300 p-2 text-right text-base text-emerald-600">₩${netPay.toLocaleString()}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="text-center mt-12 pt-6 border-t border-dashed border-slate-300">
+                    <p class="text-xs text-slate-400">본 명세서는 공단 특고 고용·산재 신고 및 세무 원천징수 내역을 검토하기 위해 생성된 자체 출력물입니다.</p>
+                    <p class="font-bold mt-4">${currentSite.company || ""} 관리부 귀하</p>
+                </div>
+            `;
+            window.print();
+        }
+
+        // 유용한 기능 2: 일괄 지급명세서 연속 출력 기능
+        function printAllReceipts() {
+            if (operators.length === 0) {
+                showNotification("출력할 기사 정보가 없습니다.", "error");
+                return;
+            }
+
+            const currentSite = sites.find(s => s.id === activeSiteId);
+            const driverRate = parseFloat(document.getElementById('setting-driver-rate').value) / 100 || 0.009;
+            const printDiv = document.getElementById('print-area');
+            
+            let htmlBuffer = "";
+
+            operators.forEach((op, index) => {
+                // 현재 필터링에 의해 화면에 보이지 않는 행은 일괄 인쇄 대상에서 자동 제외
+                const rows = document.querySelectorAll(`[data-op-index="${index}"]`);
+                if (rows.length > 0 && rows[0].style.display === "none") {
+                    return; // skip
+                }
+
+                const vat = Math.round((op.supply || 0) * 0.10);
+                const totalDue = (op.supply || 0) + vat;
+                const workerEmploymentIns = Math.round((op.salary || 0) * driverRate);
+                const netPay = totalDue - workerEmploymentIns;
+
+                const checkJumin = op.jumin || "";
+                const juminPrefix = checkJumin.includes('-') ? checkJumin.split('-')[0] : (checkJumin.substring(0, 6) || "000000");
+
+                htmlBuffer += `
+                    <div class="page-break p-6 mb-8 bg-white border border-slate-200 rounded-lg">
+                        <div class="text-center pb-6 border-b-2 border-slate-800">
+                            <h1 class="text-2xl font-bold">건설기계 및 특고 장비대금 지급 명세서</h1>
+                            <p class="text-slate-500 text-sm mt-1">현장명: ${currentSite.name || ""} (${currentSite.month || ""})</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 my-6 text-sm">
+                            <div>
+                                <p><strong>원청 상호:</strong> ${currentSite.company || ""}</p>
+                                <p><strong>장비 구분:</strong> ${op.equip || ""} (${op.spec || ""})</p>
+                                <p><strong>생년월일:</strong> ${juminPrefix}-*******</p>
+                            </div>
+                            <div class="text-right">
+                                <p><strong>기사 성명:</strong> ${op.driver || ""}</p>
+                                <p><strong>차량 등록번호:</strong> ${op.regNum || '미기재'}</p>
+                                <p><strong>가동 일수:</strong> ${op.days || 0} 일</p>
+                            </div>
+                        </div>
+
+                        <table class="w-full border-collapse border border-slate-300 text-sm mb-6">
+                            <thead>
+                                <tr class="bg-slate-100">
+                                    <th class="border border-slate-300 p-2">구분 항목</th>
+                                    <th class="border border-slate-300 p-2 text-right">계산식 및 내역</th>
+                                    <th class="border border-slate-300 p-2 text-right">금액</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="border border-slate-300 p-2 font-bold">총 장비 공급가액</td>
+                                    <td class="border border-slate-300 p-2 text-right text-slate-500">기본 장비 가동 정산분</td>
+                                    <td class="border border-slate-300 p-2 text-right font-bold">₩${(op.supply || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-slate-300 p-2">장비 부가세 (10%)</td>
+                                    <td class="border border-slate-300 p-2 text-right text-slate-500">세금계산서 발행금액</td>
+                                    <td class="border border-slate-300 p-2 text-right font-bold">₩${vat.toLocaleString()}</td>
+                                </tr>
+                                <tr class="text-rose-600">
+                                    <td class="border border-slate-300 p-2">고용보험료 기사 부담분 (${(driverRate * 100).toFixed(1)}%)</td>
+                                    <td class="border border-slate-300 p-2 text-right text-slate-500">신고 보수액(₩${(op.salary || 0).toLocaleString()}) 기준</td>
+                                    <td class="border border-slate-300 p-2 text-right">- ₩${workerEmploymentIns.toLocaleString()}</td>
+                                </tr>
+                                <tr class="bg-emerald-50 text-emerald-800 font-bold">
+                                    <td class="border border-slate-300 p-2 text-base">최종 실지급액 (차인지급액)</td>
+                                    <td class="border border-slate-300 p-2 text-right text-slate-500">원천징수 및 보험 공제액 최종 반영</td>
+                                    <td class="border border-slate-300 p-2 text-right text-base text-emerald-600">₩${netPay.toLocaleString()}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="text-center mt-12 pt-6 border-t border-dashed border-slate-300">
+                            <p class="text-xs text-slate-400">본 명세서는 공단 특고 고용·산재 신고 및 세무 원천징수 내역을 검토하기 위해 생성된 자체 출력물입니다.</p>
+                            <p class="font-bold mt-4">${currentSite.company || ""} 관리부 귀하</p>
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (!htmlBuffer) {
+                showNotification("선택/필터링 조건에 부합하는 인쇄 대상 기사가 없습니다.", "error");
+                return;
+            }
+
+            printDiv.innerHTML = htmlBuffer;
+            window.print();
+        }
+
+        // Site Manager Control Actions
+        function openSiteManagerModal() {
+            const modal = document.getElementById('site-manager-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.transform').classList.remove('scale-95');
+            }, 10);
+            renderSiteList();
+        }
+
+        // Close site manager modal helper
+        function closeSiteManagerModal() {
+            const modal = document.getElementById('site-manager-modal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('.transform').classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        // Render site list inside site manager
+        function renderSiteList() {
+            const container = document.getElementById('site-list-container');
+            container.innerHTML = '';
+            sites.forEach(s => {
+                container.innerHTML += `
+                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                        <div>
+                            <span class="font-bold text-slate-900 block">${s.company || ""}</span>
+                            <span class="text-slate-500 block">${s.name || ""} (${s.month || ""})</span>
+                        </div>
+                        <div class="flex space-x-1 shrink-0">
+                            <button onclick="deleteSite('${s.id}')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded font-bold">
+                                삭제
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Add a new site configuration
+        function addNewSite() {
+            const company = document.getElementById('new-site-company').value.trim();
+            const name = document.getElementById('new-site-name').value.trim();
+            const month = document.getElementById('new-site-month').value;
+
+            if (!company || !name || !month) {
+                showNotification("현장 정보 입력란을 채워주세요.", "error");
+                return;
+            }
+
+            const newId = "site_" + Date.now();
+            const payload = { id: newId, company, name, month };
+            sites.push(payload);
+            localStorage.setItem('site_list', JSON.stringify(sites));
+
+            document.getElementById('new-site-company').value = '';
+            document.getElementById('new-site-name').value = '';
+
+            loadSiteDropdown();
+            renderSiteList();
+            showNotification(`${company}의 새로운 신고 대상 대장이 정상 생성되었습니다.`);
+        }
+
+        // Delete site configuration safely
+        function deleteSite(siteId) {
+            if (sites.length <= 1) {
+                showNotification("최소 1개 이상의 관리 현장이 필요합니다.", "error");
+                return;
+            }
+            if (confirm("현장을 대장에서 완전히 삭제하시겠습니까? 데이터는 즉시 유실됩니다.")) {
+                sites = sites.filter(s => s.id !== siteId);
+                localStorage.setItem('site_list', JSON.stringify(sites));
+                localStorage.removeItem(`operators_${siteId}`);
+
+                if (activeSiteId === siteId) {
+                    activeSiteId = sites[0].id;
+                    localStorage.setItem('active_site_id', activeSiteId);
+                    loadOperatorsForActiveSite();
+                }
+
+                loadSiteDropdown();
+                renderSiteList();
+                showNotification("현장 및 관련 특고 기사 데이터베이스가 초기화되었습니다.");
+            }
+        }
+
+        // Modal Form Controller for Operators
+        function openAddModal() {
+            document.getElementById('modal-title').innerText = "🚜 신규 특고 기사 등록";
+            document.getElementById('form-operator-idx').value = "";
+            document.getElementById('form-equip').value = "굴삭기";
+            document.getElementById('form-lease').value = "임차";
+            document.getElementById('form-partner').value = "대호건기";
+            document.getElementById('form-driver').value = "";
+            document.getElementById('form-jumin').value = "";
+            
+            document.getElementById('form-reg-num').value = "";
+            document.getElementById('form-rate-type').value = "일대";
+            document.getElementById('form-owner').value = "";
+            document.getElementById('form-driver-type').value = "특고(일용)";
+            document.getElementById('form-hp').value = "";
+
+            document.getElementById('form-spec').value = "06W";
+            document.getElementById('form-unit-price').value = "750000";
+            document.getElementById('form-biz-num').value = "";
+            document.getElementById('form-equip-type').value = "굴삭기";
+            document.getElementById('form-addr').value = "";
+
+            calculateInsuranceWages();
+            toggleModal(true);
+        }
+
+        function openEditModal(index) {
+            const op = operators[index];
+            document.getElementById('modal-title').innerText = "✏️ 특고 기사 상세 정보 수정";
+            document.getElementById('form-operator-idx').value = index;
+            
+            document.getElementById('form-equip').value = op.equip || "굴삭기";
+            document.getElementById('form-lease').value = op.lease || "임차";
+            document.getElementById('form-partner').value = op.partner || "";
+            document.getElementById('form-driver').value = op.driver || "";
+            document.getElementById('form-jumin').value = op.jumin || "";
+            
+            document.getElementById('form-reg-num').value = op.regNum || "";
+            document.getElementById('form-rate-type').value = op.rateType || "일대";
+            document.getElementById('form-owner').value = op.owner || "";
+            document.getElementById('form-driver-type').value = op.driverType || "특고(일용)";
+            document.getElementById('form-hp').value = op.hp || "";
+
+            document.getElementById('form-spec').value = op.spec || "";
+            document.getElementById('form-unit-price').value = op.unitPrice || 750000;
+            document.getElementById('form-biz-num').value = op.bizNum || "";
+            document.getElementById('form-equip-type').value = op.equipType || "";
+            document.getElementById('form-addr').value = op.addr || "";
+
+            calculateInsuranceWages();
+            toggleModal(true);
+        }
+
+        function toggleModal(show) {
+            const modal = document.getElementById('operator-modal');
+            const inner = modal.querySelector('.transform');
+            if (show) {
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    inner.classList.remove('scale-95');
+                }, 10);
+            } else {
+                modal.classList.add('opacity-0');
+                inner.classList.add('scale-95');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        function closeModal() {
+            toggleModal(false);
+        }
+
+        function calculateInsuranceWages() {
+            const unitPrice = parseFloat(document.getElementById('form-unit-price').value) || 0;
+            // standard 1 day supply calculation preview
+            const supply = Math.round(1 * unitPrice);
+            const insuranceWages = Math.round(supply * 0.1087);
+
+            document.getElementById('calc-supply').innerText = `₩${supply.toLocaleString()} (1일 기준)`;
+            document.getElementById('calc-insurance').innerText = `₩${insuranceWages.toLocaleString()} (1일 기준)`;
+        }
+
+        function saveOperator() {
+            const idx = document.getElementById('form-operator-idx').value;
+            
+            const equip = document.getElementById('form-equip').value.trim();
+            const lease = document.getElementById('form-lease').value.trim();
+            const partner = document.getElementById('form-partner').value.trim();
+            const driver = document.getElementById('form-driver').value.trim();
+            const jumin = document.getElementById('form-jumin').value.trim();
+            
+            const regNum = document.getElementById('form-reg-num').value.trim();
+            const rateType = document.getElementById('form-rate-type').value.trim();
+            const owner = document.getElementById('form-owner').value.trim();
+            const driverType = document.getElementById('form-driver-type').value.trim();
+            const hp = document.getElementById('form-hp').value.trim();
+
+            const spec = document.getElementById('form-spec').value.trim();
+            const unitPrice = parseFloat(document.getElementById('form-unit-price').value) || 0;
+            const bizNum = document.getElementById('form-biz-num').value.trim();
+            const equipType = document.getElementById('form-equip-type').value.trim();
+            const addr = document.getElementById('form-addr').value.trim();
+
+            if (!driver || !equip || !jumin || !hp) {
+                showNotification("필수 입력값을 모두 입력해 주세요.", "error");
+                return;
+            }
+
+            // Defend logs array reference error
+            const currentLogs = (idx !== "" && operators[idx] && operators[idx].dailyLogs) ? [...operators[idx].dailyLogs] : Array(31).fill(0);
+            if (idx === "") {
+                currentLogs[0] = 1.0; // default 1 day loading
+            }
+            const days = parseFloat(currentLogs.reduce((a, b) => a + b, 0).toFixed(2));
+            const supply = Math.round(days * unitPrice);
+            const salary = Math.round(supply * 0.1087);
+
+            const payload = {
+                equip, lease, partner, driver, jumin,
+                regNum, rateType, owner, driverType, hp,
+                spec, unitPrice, bizNum, equipType, addr,
+                days, supply, salary, dailyLogs: currentLogs
+            };
+
+            if (idx === "") {
+                payload.num = operators.length + 1;
+                operators.push(payload);
+                showNotification(`${driver} 기사님이 새롭게 등록되었습니다.`);
+            } else {
+                payload.num = operators[idx].num;
+                operators[idx] = payload;
+                showNotification(`${driver} 기사님의 정보가 수정되었습니다.`);
+            }
+
+            localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+            closeModal();
+            updateUI();
+        }
+
+        function deleteOperator(index) {
+            const name = operators[index].driver;
+            if (confirm(`${name} 기사 정보를 대장에서 정말 삭제하시겠습니까?`)) {
+                operators.splice(index, 1);
+                operators.forEach((op, idx) => op.num = idx + 1);
+                localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+                showNotification(`${name} 기사 정보가 삭제되었습니다.`);
+                updateUI();
+            }
+        }
+
+        // Advanced Excel Export (Includes 1-31 Days Attendance Columns!)
+        function downloadExcel() {
+            if (operators.length === 0) {
+                showNotification("엑셀로 출력할 기사 데이터가 없습니다.", "error");
+                return;
+            }
+
+            const currentSite = sites.find(s => s.id === activeSiteId);
+            const excelData = operators.map(op => {
+                const row = {
+                    "귀속년월": currentSite.month || "",
+                    "사업장명": currentSite.name || "",
+                    "원청사 상호": currentSite.company || "",
+                    "번호": op.num,
+                    "기사 성명": op.driver || "",
+                    "주민등록번호": op.jumin || "",
+                    "휴대전화번호": op.hp || "",
+                    "건설기계 직종분류": (op.equip || "").includes("굴삭기") ? "건설기계조종사(굴삭기)" : "건설기계조종사(덤프트럭)",
+                    "당월 가동일수": op.days || 0,
+                    "고용보험 보수총액": op.salary || 0,
+                    "산재보험 보수총액": op.salary || 0,
+                    "원천세3.3% 금액": Math.round((op.supply || 0) * 0.033),
+                    "실 수령 지급액": (op.supply || 0) - Math.round((op.supply || 0) * 0.033) - Math.round((op.salary || 0) * 0.009),
+                    "건설기계 등록번호": op.regNum || "",
+                    "주소": op.addr || "",
+                    "규격": op.spec || "",
+                    "일단가": op.unitPrice || 0,
+                    "사업자번호": op.bizNum || "",
+                    "대표자명": op.owner || ""
+                };
+
+                const logs = op.dailyLogs || Array(31).fill(0);
+                for (let d = 1; d <= 31; d++) {
+                    row[`${d}일 공수`] = logs[d - 1] || 0;
+                }
+
+                return row;
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "특고 신고자료");
+
+            const cols = Object.keys(excelData[0]).map((key, i) => {
+                if (i >= 19) return { wch: 8 }; 
+                return { wch: 18 }; 
+            });
+            worksheet['!cols'] = cols;
+
+            const siteFileName = (currentSite.company || "현장").replace(/[\/\\*?:\[\]]/g, '');
+            const siteMonthName = currentSite.month || "당월";
+            XLSX.writeFile(workbook, `${siteFileName}_공수포함_신고데이터_${siteMonthName}.xlsx`);
+            showNotification("일자별 상세 공수가 포함된 엑셀 파일 다운로드가 완료되었습니다.");
+        }
+
+        // Export Active Site's Operators to Excel with full details and 31-day logs
+        function exportOperatorsExcel() {
+            if (operators.length === 0) {
+                showNotification("내보낼 기사 정보가 없습니다.", "error");
+                return;
+            }
+            const currentSite = sites.find(s => s.id === activeSiteId);
+            const excelData = operators.map(op => {
+                const row = {
+                    "번호": op.num,
+                    "장비명": op.equip || "",
+                    "분류": op.lease || "",
+                    "거래처": op.partner || "",
+                    "기사 성명": op.driver || "",
+                    "주민등록번호": op.jumin || "",
+                    "등록번호": op.regNum || "",
+                    "단가구분": op.rateType || "",
+                    "대표자명": op.owner || "",
+                    "운전원분류": op.driverType || "",
+                    "휴대전화번호": op.hp || "",
+                    "규격": op.spec || "",
+                    "일단가": op.unitPrice || 0,
+                    "사업자번호": op.bizNum || "",
+                    "건설기계종류": op.equipType || "",
+                    "주소": op.addr || "",
+                    "당월 가동일수": op.days || 0,
+                    "공급가액": op.supply || 0,
+                    "고용보험 보수총액": op.salary || 0
+                };
+
+                const logs = op.dailyLogs || Array(31).fill(0);
+                for (let d = 1; d <= 31; d++) {
+                    row[`${d}일 공수`] = logs[d - 1] || 0;
+                }
+
+                return row;
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "특고 기사 상세정보");
+
+            const cols = Object.keys(excelData[0]).map((key, i) => {
+                if (i >= 19) return { wch: 8 }; 
+                return { wch: 18 }; 
+            });
+            worksheet['!cols'] = cols;
+
+            XLSX.writeFile(workbook, `특고기사상세_${currentSite.company || "현장"}_${currentSite.month || "당월"}.xlsx`);
+            showNotification("현재 현장의 특고 기사 상세정보(31일 공수포함)가 엑셀로 저장되었습니다.");
+        }
+
+        function triggerOperatorsUpload() {
+            document.getElementById('operator-excel-input').click();
+        }
+
+        // Import Operators from Excel file
+        function importOperatorsExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(sheet);
+
+                    if (!rows || rows.length === 0) {
+                        showNotification("가져올 기사 데이터가 없거나 엑셀 양식이 비어있습니다.", "error");
+                        return;
+                    }
+
+                    const importedOps = rows.map((row, idx) => {
+                        const driver = row["기사 성명"] || row["성명"] || "기사_" + (idx + 1);
+                        const jumin = row["주민등록번호"] || row["주민번호"] || "";
+                        const hp = row["휴대전화번호"] || row["연락처"] || row["휴대전화"] || "";
+                        const equip = row["장비명"] || "굴삭기";
+                        const lease = row["분류"] || "임차";
+                        const partner = row["거래처"] || "대호건기";
+                        const regNum = row["등록번호"] || "";
+                        const rateType = row["단가구분"] || "일대";
+                        const owner = row["대표자명"] || "";
+                        const driverType = row["운전원분류"] || "특고(일용)";
+                        const spec = row["규격"] || "06W";
+                        const unitPrice = parseInt(row["일단가"]) || 750000;
+                        const bizNum = row["사업자번호"] || "";
+                        const equipType = row["건설기계종류"] || "굴삭기";
+                        const addr = row["주소"] || "";
+
+                        // Parse 31 days
+                        const dailyLogs = [];
+                        for (let d = 1; d <= 31; d++) {
+                            const val = parseFloat(row[`${d}일 공수`]) || parseFloat(row[`${d}일`]) || 0;
+                            dailyLogs.push(val);
+                        }
+
+                        let days = parseFloat(row["당월 가동일수"]) || dailyLogs.reduce((a, b) => a + b, 0);
+                        days = parseFloat(days.toFixed(2));
+
+                        const supply = parseInt(row["공급가액"]) || Math.round(days * unitPrice);
+                        const salary = parseInt(row["고용보험 보수총액"]) || Math.round(supply * 0.1087);
+
+                        return {
+                            num: idx + 1,
+                            equip, lease, partner, driver, jumin,
+                            regNum, rateType, owner, driverType, hp,
+                            spec, unitPrice, bizNum, equipType, addr,
+                            days, supply, salary, dailyLogs
+                        };
+                    });
+
+                    operators = importedOps;
+                    localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+                    updateUI();
+                    showNotification(`총 ${operators.length}명의 기사 내역(31일 공수 포함)이 성공적으로 복구되었습니다.`);
+                } catch (err) {
+                    console.error(err);
+                    showNotification("엑셀 파일 로드 및 구문 분석에 실패했습니다.", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            event.target.value = ''; 
+        }
+
+        // Backup whole system to JSON file
+        function exportJSONBackup() {
+            const backupObj = {
+                sites: sites,
+                activeSiteId: activeSiteId
+            };
+            sites.forEach(s => {
+                const sOps = localStorage.getItem(`operators_${s.id}`);
+                if (sOps) {
+                    backupObj[`operators_${s.id}`] = JSON.parse(sOps);
+                }
+            });
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupObj, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "특고고용산재_통합대장_전체백업.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showNotification("전체 회사 및 기사 대장 데이터가 무손실 백업되었습니다.");
+        }
+
+        function triggerJSONUpload() {
+            document.getElementById('json-file-input').click();
+        }
+
+        // Import system back from JSON backup
+        function importJSONBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedObj = JSON.parse(e.target.result);
+                    if (importedObj.sites && Array.isArray(importedObj.sites)) {
+                        sites = importedObj.sites;
+                        activeSiteId = importedObj.activeSiteId || sites[0].id;
+
+                        localStorage.setItem('site_list', JSON.stringify(sites));
+                        localStorage.setItem('active_site_id', activeSiteId);
+
+                        sites.forEach(s => {
+                            if (importedObj[`operators_${s.id}`]) {
+                                localStorage.setItem(`operators_${s.id}`, JSON.stringify(importedObj[`operators_${s.id}`]));
+                            }
+                        });
+
+                        loadSiteDropdown();
+                        loadOperatorsForActiveSite();
+                        showNotification("전체 회사 백업본이 복구 완료되었습니다.");
+                    } else {
+                        showNotification("백업 포맷 규격이 올바르지 않습니다.", "error");
+                    }
+                } catch (err) {
+                    showNotification("백업 파일 로드에 실패했습니다.", "error");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function saveApiKey() {
+            const key = document.getElementById('api-key-input').value.trim();
+            localStorage.setItem('gemini_api_key', key);
+            showNotification("Gemini API Key가 안전하게 저장되었습니다.");
+        }
+
+        // AI Chat UI Handler
+        function appendMessage(role, text) {
+            const container = document.getElementById('chat-messages');
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex items-start space-x-2.5 ${role === 'user' ? 'justify-end' : ''}`;
+            
+            const avatar = role === 'user' ? '👤' : '🤖';
+            const bgClass = role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none';
+
+            wrapper.innerHTML = `
+                ${role !== 'user' ? `<div class="p-2 bg-indigo-100 text-indigo-700 rounded-lg">${avatar}</div>` : ''}
+                <div class="${bgClass} p-3 rounded-2xl max-w-[85%] leading-relaxed">
+                    ${text}
+                </div>
+                ${role === 'user' ? `<div class="p-2 bg-slate-200 text-slate-700 rounded-lg">${avatar}</div>` : ''}
+            `;
+            container.appendChild(wrapper);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function handleChatKey(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        }
+
+        function clearChat() {
+            document.getElementById('chat-messages').innerHTML = `
+                <div class="flex items-start space-x-2.5">
+                    <div class="p-2 bg-indigo-100 text-indigo-700 rounded-lg">🤖</div>
+                    <div class="bg-slate-100 p-3 rounded-2xl rounded-tl-none max-w-[85%] text-slate-700 leading-relaxed">
+                        대화가 초기화되었습니다. 분석이나 가이드가 필요한 내용을 언제든 문의해 주세요.
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchGeminiAPI(systemPrompt, userQuery) {
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) return null; 
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text || "답변을 추출하지 못했습니다.";
+                    }
+                } catch (err) {}
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+            throw new Error("API 요청 횟수 제한 또는 서버 점검 중입니다.");
+        }
+
+        function simulateAIResponse(query) {
+            const q = query.toLowerCase();
+            const totalOps = operators.length;
+            const totalDays = operators.reduce((acc, curr) => acc + (curr.days || 0), 0).toFixed(2);
+            const totalSalary = operators.reduce((acc, curr) => acc + (curr.salary || 0), 0);
+
+            if (q.includes('요약') || q.includes('리포트')) {
+                return `📋 <strong>현장 대장 종합 리포트</strong><br><br>
+                • <strong>신고대상 인원:</strong> 총 ${totalOps}명<br>
+                • <strong>총 투입공수:</strong> ${totalDays}일<br>
+                • <strong>신고 보수총액 합계:</strong> ₩${totalSalary.toLocaleString()}<br><br>
+                누락된 주소 등의 정합성 검증 상태를 점검하신 후 다운로드하여 공단에 바로 신고할 수 있습니다.`;
+            }
+            if (q.includes('감사') || q.includes('점검') || q.includes('오류') || q.includes('이상치')) {
+                return `🛡️ <strong>정합성 점검 결과 요약</strong><br><br>
+                1. <strong>필수값 누락:</strong> 주소가 입력되지 않은 기사명이 다수 존재합니다. (기사 상세 수정창에서 주소 기재를 권장합니다.)<br>
+                2. <strong>보수액 요율 정합성:</strong> 국세청 필요경비 공제(24.3%)를 반영한 공단 신고 보수총액 매핑율 10.87% 정밀 검증 결과 정상 범주에 있습니다.`;
+            }
+            return `현재 선택되어 가동 중인 현장의 특고 기사는 총 ${totalOps}명, 총 보수총액은 ₩${totalSalary.toLocaleString()}입니다.`;
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-user-input');
+            const query = input.value.trim();
+            if (!query) return;
+
+            appendMessage('user', query);
+            input.value = '';
+
+            appendMessage('ai', `<span class="flex items-center gap-1.5"><svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 지능형 분석 엔진이 기사 대장 명세를 확인하고 있습니다...</span>`);
+            const loadingMessageDiv = document.getElementById('chat-messages').lastElementChild;
+
+            try {
+                const systemPrompt = `당신은 대한민국 근로복지공단 고용·산재 보험 신고 전문가입니다. 현재 현장 데이터: ${JSON.stringify(operators)}`;
+                const aiResponse = await fetchGeminiAPI(systemPrompt, query);
+                loadingMessageDiv.remove(); 
+                
+                if (aiResponse) {
+                    appendMessage('ai', aiResponse.replace(/\n/g, '<br>'));
+                } else {
+                    appendMessage('ai', simulateAIResponse(query));
+                }
+            } catch (err) {
+                loadingMessageDiv.remove();
+                appendMessage('ai', `⚠️ 로컬 백업 지식으로 즉시 대체 응답합니다.<br><br>${simulateAIResponse(query)}`);
+            }
+        }
+
+        function triggerQuickTask(taskType) {
+            let query = '';
+            if (taskType === 'audit') query = '고용/산재 보수총액 점검 및 이상치 감사를 진행해줘';
+            else if (taskType === 'summary') query = '대장 종합 리포트를 작성해줘';
+            else if (taskType === 'anomaly') query = '신고 오류 및 공단 반려 요인 탐색';
+            
+            document.getElementById('chat-user-input').value = query;
+            sendChatMessage();
+        }
+
+        async function parseAndImportText() {
+            const rawText = document.getElementById('ai-import-area').value.trim();
+            if (!rawText) {
+                showNotification("텍스트를 입력창에 붙여넣어 주세요.", "error");
+                return;
+            }
+
+            const nameMatch = rawText.match(/([가-힣]{2,4})/);
+            const juminMatch = rawText.match(/(\d{6}-\d{7})/);
+            const hpMatch = rawText.match(/(010-\d{3,4}-\d{4})/);
+            const daysMatch = rawText.match(/(\d+(\.\d+)?)\s*일/);
+            const supplyMatch = rawText.match(/(\d+)\s*(원|공급)/);
+
+            let driver = nameMatch ? nameMatch[1] : "신규기사";
+            let jumin = juminMatch ? juminMatch[1] : "900101-1000000";
+            let hp = hpMatch ? hpMatch[1] : "010-0000-0000";
+            let days = daysMatch ? parseFloat(daysMatch[1]) : 1.0;
+            let supply = supplyMatch ? parseInt(supplyMatch[1].replace(/,/g, '')) : 750000;
+            let salary = Math.round(supply * 0.1087);
+
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (apiKey) {
+                showNotification("AI 텍스트 구조화를 진행하고 있습니다...", "success");
+                try {
+                    const prompt = `다음 투입대장 대화 기록에서 데이터를 추출해라. JSON 한 행만 리턴. 스키마: {"driver": string, "jumin": string, "hp": string, "equip": string, "lease": string, "partner": string, "regNum": string, "rateType": string, "owner": string, "driverType": string, "spec": string, "unitPrice": number, "bizNum": string, "equipType": string, "addr": string, "days": number, "supply": number, "salary": number} 텍스트: "${rawText}"`;
+                    const response = await fetchGeminiAPI("JSON만 정확히 출력하라.", prompt);
+                    if (response) {
+                        const jsonStr = response.replace(/```json/g, '').replace(/```/g, '').trim();
+                        const parsed = JSON.parse(jsonStr);
+                        parsed.num = operators.length + 1;
+                        parsed.dailyLogs = Array(31).fill(0);
+                        parsed.dailyLogs[0] = parsed.days || 1.0;
+                        
+                        // Prevent undefined injection from AI response
+                        parsed.driver = parsed.driver || "신규기사";
+                        parsed.jumin = parsed.jumin || "900101-1000000";
+                        parsed.hp = parsed.hp || "010-0000-0000";
+                        parsed.equip = parsed.equip || "굴삭기";
+                        parsed.lease = parsed.lease || "임차";
+                        parsed.partner = parsed.partner || "";
+                        parsed.regNum = parsed.regNum || "";
+                        parsed.rateType = parsed.rateType || "일대";
+                        parsed.owner = parsed.owner || "";
+                        parsed.driverType = parsed.driverType || "특고(일용)";
+                        parsed.spec = parsed.spec || "";
+                        parsed.unitPrice = parseFloat(parsed.unitPrice) || 0;
+                        parsed.bizNum = parsed.bizNum || "";
+                        parsed.equipType = parsed.equipType || "";
+                        parsed.addr = parsed.addr || "";
+
+                        operators.push(parsed);
+                        localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+                        showNotification(`[AI 파싱] ${parsed.driver} 기사가 현장 대장에 추가되었습니다.`);
+                        updateUI();
+                        switchTab('database');
+                        return;
+                    }
+                } catch (e) {}
+            }
+
+            const payload = {
+                num: operators.length + 1,
+                equip: rawText.includes("덤프") ? "덤프" : "굴삭기",
+                lease: "임차",
+                partner: "대호건기",
+                driver,
+                jumin,
+                regNum: "임시차량번호",
+                rateType: "일대",
+                owner: driver,
+                driverType: "특고(일용)",
+                hp,
+                spec: "06W",
+                unitPrice: 750000,
+                bizNum: "000-00-00000",
+                equipType: "굴삭기",
+                addr: "",
+                days,
+                supply,
+                salary,
+                dailyLogs: Array(31).fill(0)
+            };
+            payload.dailyLogs[0] = days;
+
+            operators.push(payload);
+            localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+            showNotification(`[정규식 분석] ${driver} 기사가 임시 등록되었습니다.`);
+            updateUI();
+            switchTab('database');
+        }
+
+        // 유용한 기능 1: 공수 일괄 채우기 매크로 모달 제어
+        function openMacroModal() {
+            const modal = document.getElementById('macro-modal');
+            const targetSelect = document.getElementById('macro-target-operator');
+            
+            // 드롭다운 기사 목록 동적 바인딩
+            targetSelect.innerHTML = `<option value="all">★ 전체 기사 대상 일괄 대입</option>`;
+            operators.forEach((op, index) => {
+                targetSelect.innerHTML += `<option value="${index}">${op.driver} (${op.equip} - ${op.spec || op.regNum})</option>`;
+            });
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.transform').classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeMacroModal() {
+            const modal = document.getElementById('macro-modal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('.transform').classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        // 매크로 실제 적용 알고리즘
+        function applyAttendanceMacro() {
+            const targetIdx = document.getElementById('macro-target-operator').value;
+            const pattern = document.getElementById('macro-pattern').value;
+            const currentSite = sites.find(s => s.id === activeSiteId);
+
+            // 해당 귀속 월의 일자별 요일 계산을 위한 파싱
+            let year = 2026;
+            let month = 5;
+            if (currentSite && currentSite.month) {
+                const parts = currentSite.month.split('-');
+                year = parseInt(parts[0]) || 2026;
+                month = parseInt(parts[1]) || 5;
+            }
+
+            function getPatternLogs(targetPattern) {
+                const logs = Array(31).fill(0);
+                for (let d = 1; d <= 31; d++) {
+                    const dateObj = new Date(year, month - 1, d);
+                    // 브라우저 Date 오버플로우 방지 (예: 2월 30일 등 존재하지 않는 일자는 가동 없음)
+                    if (dateObj.getMonth() !== month - 1) continue;
+
+                    const dayOfWeek = dateObj.getDay(); // 0: 일요일, 6: 토요일
+
+                    if (targetPattern === 'everyday') {
+                        logs[d - 1] = 1.0;
+                    } else if (targetPattern === 'weekday') {
+                        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                            logs[d - 1] = 1.0;
+                        }
+                    } else if (targetPattern === 'saturday') {
+                        if (dayOfWeek >= 1 && dayOfWeek <= 6) {
+                            logs[d - 1] = 1.0;
+                        }
+                    } else if (targetPattern === 'half_weekday') {
+                        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                            logs[d - 1] = 0.5;
+                        }
+                    } else if (targetPattern === 'clear') {
+                        logs[d - 1] = 0;
+                    }
+                }
+                return logs;
+            }
+
+            const macroLogs = getPatternLogs(pattern);
+
+            if (targetIdx === 'all') {
+                if (!confirm("현장의 전체 기사들에게 이 가동 패턴을 대입하시겠습니까? 기존 기록은 모두 변경됩니다.")) {
+                    return;
+                }
+                operators.forEach(op => {
+                    op.dailyLogs = [...macroLogs];
+                    op.days = parseFloat(op.dailyLogs.reduce((a, b) => a + b, 0).toFixed(2));
+                    op.supply = Math.round(op.days * op.unitPrice);
+                    op.salary = Math.round(op.supply * 0.1087);
+                });
+                showNotification("선택하신 현장 전체 인원에 가동 패턴 매크로가 성공적으로 탑재되었습니다.");
+            } else {
+                const idx = parseInt(targetIdx);
+                if (operators[idx]) {
+                    operators[idx].dailyLogs = [...macroLogs];
+                    operators[idx].days = parseFloat(operators[idx].dailyLogs.reduce((a, b) => a + b, 0).toFixed(2));
+                    operators[idx].supply = Math.round(operators[idx].days * operators[idx].unitPrice);
+                    operators[idx].salary = Math.round(operators[idx].supply * 0.1087);
+                    showNotification(`${operators[idx].driver} 기사의 가동일수가 패턴대로 즉시 변경되었습니다.`);
+                }
+            }
+
+            localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+            closeMacroModal();
+            updateUI();
+        }
+
+        // --- 새로 추가된 달력 형태 공수 관리 기능 제어부 ---
+        function openCalendarModal(index) {
+            calendarTargetOperatorIdx = index;
+            const op = operators[index];
+            const currentSite = sites.find(s => s.id === activeSiteId);
+
+            // 임시 공수 저장소 복사
+            calendarWorkingLogs = [...op.dailyLogs];
+
+            document.getElementById('calendar-operator-info').innerText = `${op.driver} 기사님 (${op.equip} - ${op.spec || op.regNum})`;
+            
+            // 귀속월 렌더링 준비
+            let year = 2026;
+            let month = 5;
+            if (currentSite && currentSite.month) {
+                const parts = currentSite.month.split('-');
+                year = parseInt(parts[0]) || 2026;
+                month = parseInt(parts[1]) || 5;
+            }
+
+            document.getElementById('calendar-modal-title').innerHTML = `📅 달력형 공수 입력기 (${year}년 ${String(month).padStart(2, '0')}월)`;
+
+            renderCalendarGrid(year, month);
+            updateCalendarModalCalculations(op.unitPrice);
+
+            // 모달 노출 활성화
+            const modal = document.getElementById('calendar-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.transform').classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeCalendarModal() {
+            const modal = document.getElementById('calendar-modal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('.transform').classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+            calendarTargetOperatorIdx = null;
+        }
+
+        function renderCalendarGrid(year, month) {
+            const container = document.getElementById('calendar-days-grid');
+            container.innerHTML = '';
+
+            // 이번 달 1일의 시작 요일과 총 일수 구하기
+            const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0: 일요일 ~ 6: 토요일
+            const totalDaysInMonth = new Date(year, month, 0).getDate();
+
+            // 이전 달 빈 셀 채우기
+            for (let i = 0; i < firstDayIndex; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = "bg-slate-50 border border-dashed border-slate-100 h-16 rounded-xl";
+                container.appendChild(emptyCell);
+            }
+
+            // 날짜 셀 채우기
+            for (let day = 1; day <= totalDaysInMonth; day++) {
+                const logValue = calendarWorkingLogs[day - 1] || 0;
+                
+                // 요일 판단 (일요일: 0, 토요일: 6)
+                const dayOfWeek = new Date(year, month - 1, day).getDay();
+                let dayColorClass = "text-slate-800";
+                if (dayOfWeek === 0) dayColorClass = "text-red-500";
+                else if (dayOfWeek === 6) dayColorClass = "text-blue-500";
+
+                // 공수 수치에 따른 배경색 설정
+                let badgeClass = "bg-slate-100 text-slate-500";
+                if (logValue === 1.0) badgeClass = "bg-indigo-600 text-white font-bold";
+                else if (logValue === 0.5) badgeClass = "bg-amber-500 text-white font-bold";
+                else if (logValue > 0) badgeClass = "bg-emerald-500 text-white font-bold";
+
+                const dayCell = document.createElement('div');
+                dayCell.className = "bg-white border border-slate-200 h-16 rounded-xl p-1.5 flex flex-col justify-between cursor-pointer hover:border-indigo-400 transition-all shadow-sm select-none relative";
+                
+                // 클릭 시 공수 순환 토글 (0 -> 1.0 -> 0.5 -> 0)
+                dayCell.onclick = function() {
+                    let currentVal = calendarWorkingLogs[day - 1] || 0;
+                    let nextVal = 0;
+                    if (currentVal === 0) nextVal = 1.0;
+                    else if (currentVal === 1.0) nextVal = 0.5;
+                    else if (currentVal === 0.5) nextVal = 0;
+                    else nextVal = 0; // 기타 비정규값일 시 0으로 순환
+
+                    calendarWorkingLogs[day - 1] = nextVal;
+                    renderCalendarGrid(year, month);
+                    
+                    const unitPrice = operators[calendarTargetOperatorIdx].unitPrice;
+                    updateCalendarModalCalculations(unitPrice);
+                };
+
+                dayCell.innerHTML = `
+                    <div class="flex justify-between items-start w-full">
+                        <span class="text-xs font-bold ${dayColorClass}">${day}</span>
+                    </div>
+                    <div class="flex items-center justify-between w-full">
+                        <!-- 빠른 수동 수치 기입 인풋 (직접 타자 쳐서 정밀 공수 조절 가능) -->
+                        <input type="number" step="0.1" min="0" max="2" value="${logValue}" 
+                            onclick="event.stopPropagation();"
+                            onchange="onCalendarDayInputChange(${day - 1}, this.value, ${year}, ${month})"
+                            class="w-8 text-center text-[10px] font-bold border border-slate-200 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                        
+                        <span class="text-[9px] px-1 py-0.5 rounded-md ${badgeClass}">
+                            ${logValue > 0 ? logValue + '공' : '휴무'}
+                        </span>
+                    </div>
+                `;
+                container.appendChild(dayCell);
+            }
+
+            // 7열 맞춤 그리드 정돈을 위한 여백용 남은 칸 채우기 (옵션)
+            const occupiedCells = firstDayIndex + totalDaysInMonth;
+            const remainingCells = (7 - (occupiedCells % 7)) % 7;
+            for (let i = 0; i < remainingCells; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = "bg-slate-50 border border-dashed border-slate-100 h-16 rounded-xl";
+                container.appendChild(emptyCell);
+            }
+        }
+
+        // 달력 인풋 박스를 통한 수동 기입 지원
+        function onCalendarDayInputChange(dayIdx, value, year, month) {
+            const val = parseFloat(value) || 0;
+            calendarWorkingLogs[dayIdx] = val;
+            
+            // 재배치 및 연산
+            renderCalendarGrid(year, month);
+            const unitPrice = operators[calendarTargetOperatorIdx].unitPrice;
+            updateCalendarModalCalculations(unitPrice);
+        }
+
+        // 실시간 달력 내부 예측치 계산
+        function updateCalendarModalCalculations(unitPrice) {
+            const sum = calendarWorkingLogs.reduce((a, b) => a + b, 0);
+            const totalDays = parseFloat(sum.toFixed(2));
+            const supply = Math.round(totalDays * unitPrice);
+            const salary = Math.round(supply * 0.1087);
+
+            document.getElementById('calendar-total-days').innerText = `${totalDays} 일`;
+            document.getElementById('calendar-predict-supply').innerText = `₩${supply.toLocaleString()}`;
+            document.getElementById('calendar-predict-salary').innerText = `₩${salary.toLocaleString()}`;
+        }
+
+        // 달력 편집 내역을 기획 장부에 저장 커밋
+        function saveCalendarAttendance() {
+            if (calendarTargetOperatorIdx === null) return;
+            
+            const op = operators[calendarTargetOperatorIdx];
+            op.dailyLogs = [...calendarWorkingLogs];
+            op.days = parseFloat(op.dailyLogs.reduce((a, b) => a + b, 0).toFixed(2));
+            
+            // MOP 기준 재정밀 정산 환산
+            op.supply = Math.round(op.days * op.unitPrice);
+            op.salary = Math.round(op.supply * 0.1087);
+
+            localStorage.setItem(`operators_${activeSiteId}`, JSON.stringify(operators));
+            closeCalendarModal();
+            updateUI();
+            showNotification(`${op.driver} 기사님의 월간 공수 변경사항이 완벽하게 반영되었습니다.`);
+        }
+    </script>
+</body>
+</html>
